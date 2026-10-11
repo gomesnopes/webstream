@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b0d12">
+<title>Matchroom Player — Diagnostic Build</title>
+<style>
+:root{color-scheme:dark;--bg:#0b0d12;--panel:#141923;--line:#2c3545;--text:#f4f6fa;--muted:#9da8b9;--accent:#b9f36c;--red:#ff9292}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.wrap{max-width:980px;margin:auto;padding:18px 14px 40px}.brand{display:flex;align-items:center;gap:10px;margin-bottom:20px;font-size:19px;font-weight:800}.logo{display:grid;place-items:center;width:38px;height:38px;border-radius:12px;background:var(--accent);color:#10140a}.tag{font-size:11px;color:var(--muted);font-weight:500;letter-spacing:1px;text-transform:uppercase}.grid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(270px,.7fr);gap:14px}.card{border:1px solid var(--line);background:var(--panel);border-radius:16px;padding:14px;min-width:0}.screen{position:relative;background:#000;border-radius:11px;aspect-ratio:16/9;display:grid;place-items:center;overflow:hidden}video{width:100%;height:100%;object-fit:contain;background:#000}.placeholder{text-align:center;padding:20px;color:var(--muted)}.placeholder b{display:block;color:var(--text);font-size:19px;margin-bottom:6px}.meta{padding:13px 2px 2px}.meta b{display:block}.muted{font-size:12px;color:var(--muted);overflow-wrap:anywhere}h2{font-size:16px;margin:0 0 5px}p{font-size:12px;color:var(--muted);margin:0 0 13px}label{display:block;font-size:12px;font-weight:700;margin:13px 0 6px}.field{width:100%;padding:11px;border:1px solid #394456;border-radius:9px;background:#0c1017;color:var(--text);font:inherit;min-width:0}.btn{width:100%;border:1px solid var(--line);border-radius:10px;padding:11px;background:#222a38;color:var(--text);font-weight:750;margin-top:9px}.btn.primary{background:var(--accent);border-color:var(--accent);color:#11160a}.status{margin-top:12px;padding:11px;border-radius:9px;background:#0b1017;border:1px solid var(--line);font-size:12px;color:var(--muted);overflow-wrap:anywhere;white-space:pre-wrap}.status.ok{color:var(--accent)}.status.bad{color:var(--red)}.logs{max-height:150px;overflow:auto;font-size:11px;white-space:pre-wrap;color:#b4becc;background:#0b1017;border-radius:8px;padding:9px;margin-top:8px}.note{margin-top:14px;padding:12px;border-radius:10px;background:#1b202b;color:#c0cad8;font-size:12px}.actions{display:flex;gap:8px}.actions .btn{flex:1}.hide{display:none!important}@media(max-width:760px){.grid{grid-template-columns:1fr}.wrap{padding:13px 10px 30px}.card{padding:11px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand"><div class="logo">M</div><div>Matchroom <div class="tag">Safari diagnostic player</div></div></div>
+  <div class="grid">
+    <section class="card">
+      <div class="screen" id="screen">
+        <div class="placeholder" id="placeholder"><b>Player siap</b>Tekan “Tes stream publik” untuk menguji pemutaran HLS.</div>
+        <video id="video" controls playsinline webkit-playsinline preload="metadata" class="hide"></video>
+      </div>
+      <div class="meta"><b id="videoTitle">Belum ada video</b><div id="videoSub" class="muted">Gunakan tes bawaan atau masukkan URL milikmu.</div></div>
+      <div id="status" class="status">Status: menunggu sumber video.</div>
+      <div id="logs" class="logs">Log diagnostik akan tampil di sini.</div>
+    </section>
+    <aside class="card">
+      <h2>1. Tes sumber publik</h2>
+      <p>Ini hanya video uji HLS, bukan siaran olahraga.</p>
+      <button class="btn primary" id="testBtn">Tes stream publik</button>
+      <h2 style="margin-top:20px">2. Sumber sendiri</h2>
+      <label for="name">Nama siaran</label><input class="field" id="name" value="Siaran uji">
+      <label for="url">URL video / HLS (.m3u8)</label><input class="field" id="url" type="url" placeholder="https://server.example/live.m3u8" autocomplete="off">
+      <button class="btn" id="playBtn">Muat URL</button>
+      <div class="note"><b>Catatan Safari:</b> gunakan HTTPS. HLS biasanya diputar native oleh Safari. URL yang butuh header khusus, cookie, login, atau yang diblokir oleh server mungkin gagal di halaman web. File HTML yang dibuka dari Files juga bisa menghadapi batasan akses jaringan.</div>
+      <button class="btn" id="clearBtn">Reset player dan log</button>
+    </aside>
+  </div>
+</div>
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const video = $('video');
+const TEST_URL = 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8';
+let watchdog = null;
+function log(msg){const t=new Date().toLocaleTimeString();const el=$('logs');if(el.textContent==='Log diagnostik akan tampil di sini.')el.textContent='';el.textContent+=`[${t}] ${msg}\n`;el.scrollTop=el.scrollHeight;}
+function status(msg,kind=''){ $('status').textContent=msg; $('status').className='status '+kind;}
+function safeUrl(s){try{const u=new URL(s.trim());return ['https:','http:'].includes(u.protocol)?u.href:null}catch{return null}}
+function reset(){
+ if(watchdog)clearTimeout(watchdog);
+ video.pause();video.removeAttribute('src');video.load();video.classList.add('hide');$('placeholder').classList.remove('hide');
+}
+function load(url,title){
+ const valid=safeUrl(url); if(!valid){status('URL tidak valid. Masukkan URL lengkap dengan https:// atau http://.','bad');return;}
+ reset();$('placeholder').classList.add('hide');video.classList.remove('hide');
+ $('videoTitle').textContent=title||'Video';$('videoSub').textContent=valid;
+ status('Memuat sumber video…');log('Memuat: '+valid);
+ log('Browser native HLS: '+(video.canPlayType('application/vnd.apple.mpegurl')||'tidak terdeteksi'));
+ video.src=valid;video.load();
+ watchdog=setTimeout(()=>{if(video.readyState<2){status('Belum ada data video setelah 12 detik. Kemungkinan URL tidak aktif, server memblokir akses, stream butuh autentikasi, atau koneksi bermasalah.','bad');log('Watchdog: readyState='+video.readyState+'; networkState='+video.networkState);}},12000);
+}
+video.addEventListener('loadstart',()=>{log('loadstart');status('Permintaan video dimulai…');});
+video.addEventListener('loadedmetadata',()=>{log('loadedmetadata: '+video.videoWidth+'x'+video.videoHeight+'; durasi='+video.duration);status('Metadata video diterima. Tekan Play jika belum mulai.','ok');if(watchdog)clearTimeout(watchdog);});
+video.addEventListener('loadeddata',()=>{log('loadeddata');status('Data video tersedia. Tekan Play untuk mulai.','ok');if(watchdog)clearTimeout(watchdog);});
+video.addEventListener('canplay',()=>{log('canplay');status('Video siap diputar. Tekan Play.','ok');if(watchdog)clearTimeout(watchdog);});
+video.addEventListener('playing',()=>{log('playing');status('Video sedang diputar.','ok');if(watchdog)clearTimeout(watchdog);});
+video.addEventListener('waiting',()=>{log('waiting: buffer menunggu data');});
+video.addEventListener('stalled',()=>{log('stalled: transfer data berhenti sementara');});
+video.addEventListener('error',()=>{
+ const e=video.error;let detail='Error video tidak diketahui.';
+ if(e){const map={1:'Pemutaran dibatalkan.',2:'Kesalahan jaringan saat mengambil video.',3:'Format/decoder video tidak dapat memproses sumber.',4:'Sumber tidak didukung atau URL tidak dapat diakses.'};detail=`Kode ${e.code}: ${map[e.code]||'Kesalahan media.'}`;}
+ status(detail+' Periksa URL, koneksi, dukungan HLS, dan izin server.','bad');log('ERROR: '+detail+' networkState='+video.networkState+' readyState='+video.readyState);
+});
+$('testBtn').addEventListener('click',()=>{$('url').value=TEST_URL;$('name').value='Mux HLS Test';load(TEST_URL,'Mux HLS Test');});
+$('playBtn').addEventListener('click',()=>load($('url').value,$('name').value.trim()||'Siaran'));
+$('clearBtn').addEventListener('click',()=>{reset();$('logs').textContent='Log diagnostik akan tampil di sini.';status('Status: menunggu sumber video.');$('videoTitle').textContent='Belum ada video';$('videoSub').textContent='Gunakan tes bawaan atau masukkan URL milikmu.';});
+})();
+</script>
+</body>
+</html>
